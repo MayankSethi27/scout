@@ -1,0 +1,40 @@
+# GitHub Code Retrieval HTTP Server - Docker Compose
+# Run with: docker-compose up --build
+
+version: "3.8"
+
+services:
+  code-retrieval:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: github-code-retrieval
+    ports:
+      - "${SERVER_PORT:-8000}:8000"
+    environment:
+      - DEBUG=false
+      - ENVIRONMENT=production
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=8000
+      - EMBEDDING_MODEL=all-MiniLM-L6-v2
+      - EMBEDDING_DEVICE=cpu
+      - VECTOR_STORE_BACKEND=chroma
+      - VECTOR_STORE_PATH=/app/data/vector_db
+      - REPO_STORAGE_PATH=/app/data/repos
+    volumes:
+      # Persist vector database and cloned repos
+      - vector_data:/app/data/vector_db
+      - repo_data:/app/data/repos
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  vector_data:
+    driver: local
+  repo_data:
+    driver: local
