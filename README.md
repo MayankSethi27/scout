@@ -1,10 +1,27 @@
-# GitHub Code Retrieval MCP Server
+# Scout
 
-An MCP (Model Context Protocol) server that gives Claude the ability to search and analyze any GitHub repository using semantic code search.
+Give Claude the power to understand any GitHub codebase instantly.
+
+An MCP server that enables Claude to analyze any GitHub repository using semantic code search. Just paste a GitHub URL and ask questions.
 
 **Works with:** Claude Desktop, Claude Code CLI
 
-**Fully local** - No API keys required. All embeddings run locally.
+### Why not just paste a GitHub URL into ChatGPT/Claude?
+
+| | Pasting URL directly | This MCP Tool |
+|---|---|---|
+| **Access to code** | Can only see README or limited files | Searches entire codebase |
+| **Large repos** | Hits context limits quickly | Handles repos of any size |
+| **Accuracy** | Often hallucinates code | Returns actual code snippets |
+| **Private repos** | No access | Works with your git credentials |
+| **Speed** | Must re-read each time | Indexed and cached locally |
+
+### Features
+- **100% Local** - No API keys needed, all processing on your machine
+- **Semantic Search** - Finds code by meaning, not just keywords
+- **Fast** - Index once (~30s), query instantly (~0.01s)
+- **Private Repos** - Works with your git credentials
+- **20+ Languages** - Python, JS, TS, Go, Rust, Java, C++, and more
 
 ## Quick Start (2 Steps)
 
@@ -57,6 +74,10 @@ Run this single command to add the MCP server globally:
 
 ```bash
 claude mcp add github-code-retrieval -s user
+```
+```bash
+ # For HTTP server
+  claude mcp add --transport http github-code-retrieval http://localhost:8000
 ```
 
 The `-s user` flag adds it at user scope, so it works in any directory.
