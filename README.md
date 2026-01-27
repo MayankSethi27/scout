@@ -114,7 +114,6 @@ After setup, verify the MCP server is connected:
 
 - **Claude Desktop:** Look for the tool icon in the chat interface
 - **Claude Code CLI:** Run `/mcp` to see connected servers
-- **Cursor:** Check the MCP status in the bottom status bar
 
 ## Usage
 
@@ -166,45 +165,6 @@ Claude will automatically use the tool to:
 │                              ▼                                  │
 │  Claude receives code snippets and explains them to you        │
 └─────────────────────────────────────────────────────────────────┘
-```
-
-## Tool Schema
-
-The MCP server exposes one tool: `analyze_github_repo`
-
-**Input:**
-```json
-{
-  "repo_url": "https://github.com/owner/repo",
-  "question": "How does authentication work?",
-  "top_k": 10
-}
-```
-
-**Output:**
-```json
-{
-  "success": true,
-  "repository": {
-    "url": "https://github.com/owner/repo",
-    "owner": "owner",
-    "name": "repo",
-    "total_files_indexed": 45,
-    "total_chunks": 230
-  },
-  "query": "How does authentication work?",
-  "code_snippets": [
-    {
-      "file_path": "src/auth/handler.py",
-      "content": "def authenticate(request):\n    ...",
-      "start_line": 45,
-      "end_line": 78,
-      "language": "python",
-      "relevance_score": 0.89
-    }
-  ],
-  "total_results": 10
-}
 ```
 
 ## Configuration (Optional)
@@ -280,9 +240,6 @@ Then configure clients to connect:
 }
 ```
 
-## Supported Languages
-
-Python, JavaScript, TypeScript, JSX, TSX, Java, Kotlin, Go, Rust, C, C++, C#, Ruby, PHP, Swift, Scala, SQL, GraphQL, YAML, JSON, TOML, Markdown, and more.
 
 ## Troubleshooting
 
@@ -306,14 +263,6 @@ Or use the full path:
 }
 ```
 
-### Slow first query
-The first query for a repo takes ~30-60 seconds to:
-1. Clone the repository
-2. Load the embedding model (~400MB)
-3. Index all code files
-
-Subsequent queries are fast (~0.01s).
-
 ### Out of memory
 Large repos may need more RAM. Try:
 - Reducing `CHUNK_SIZE` in `.env`
@@ -336,7 +285,3 @@ pip install -e ".[dev]"
 # Run tests
 pytest
 ```
-
-## License
-
-MIT
