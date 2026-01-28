@@ -177,7 +177,7 @@ SERVER_HOST=0.0.0.0
 SERVER_PORT=8000
 
 # Repository cloning (GitHub URLs only, local repos need no config)
-REPO_STORAGE_PATH=./data/repos
+REPO_STORAGE_PATH=~/.scout/repos
 REPO_CACHE_TTL_HOURS=24
 REPO_CLONE_TIMEOUT_SECONDS=300
 ```

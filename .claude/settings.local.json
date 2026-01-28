@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell -Command \"Measure-Command { python -c \"\"from app.services.overview import get_overview; o = get_overview\\(r''C:\\\\Users\\\\Mayank\\\\.scout\\\\test_clone''\\); print\\(f''Files: {o.file_stats}''\\)\"\" 2>&1 } | Select-Object TotalSeconds\")"
+    ]
+  }
+}

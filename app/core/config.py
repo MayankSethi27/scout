@@ -4,6 +4,7 @@ Application Configuration.
 Loads settings from environment variables with sensible defaults.
 """
 
+import os
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 
@@ -20,7 +21,7 @@ class Settings(BaseSettings):
     server_port: int = 8000
 
     # Repository cloning (for GitHub URLs)
-    repo_storage_path: str = "./data/repos"
+    repo_storage_path: str = os.path.join(os.path.expanduser("~"), ".scout", "repos")
     repo_cache_ttl_hours: int = 24
     repo_clone_timeout_seconds: int = 300
 
