@@ -27,8 +27,18 @@ An MCP server that enables Claude to analyze any GitHub repository using semanti
 
 ### Step 1: Install
 
+**Using pipx (handles PATH automatically)**
 ```bash
-pip install github-code-retrieval
+# Step 1: Install pipx
+pip install pipx
+
+# Step 2: Add pipx to your PATH
+python -m pipx ensurepath
+
+# Step 3: Close and reopen your terminal (required!)
+
+# Step 4: Install github-code-retrieval
+pipx install github-code-retrieval
 ```
 
 ### Step 2: Add to Claude
@@ -68,45 +78,19 @@ Choose your platform:
 
 #### Claude Code CLI
 
-**Option A: Using the CLI command (Recommended)**
-
-Run this single command to add the MCP server globally:
-
 ```bash
-claude mcp add github-code-retrieval -s user
-```
-```bash
- # For HTTP server
-  claude mcp add --transport http github-code-retrieval http://localhost:8000
+#  Register with Claude Code CLI
+claude mcp add github-code-retrieval -s user -- github-code-retrieval
 ```
 
 The `-s user` flag adds it at user scope, so it works in any directory.
 
-**Option B: Manual configuration**
+> **If you get "command not found"** after Step 3, see [Troubleshooting](#command-not-found-github-code-retrieval) for alternative commands.
 
-Add to your config file:
-
-| Scope | Config File Location |
-|-------|---------------------|
-| Global (user) | `~/.claude.json` (macOS/Linux) or `C:\Users\<username>\.claude.json` (Windows) |
-| Project-specific | `.claude.json` in your project directory |
-
-Add this to the config file:
-
-```json
-{
-  "mcpServers": {
-    "github-code-retrieval": {
-      "command": "github-code-retrieval",
-      "args": []
-    }
-  }
-}
+**For HTTP server mode:**
+```bash
+claude mcp add --transport http github-code-retrieval http://localhost:8000
 ```
-
-Then restart Claude Code CLI.
-
----
 
 **Verify Installation**
 
@@ -244,14 +228,55 @@ Then configure clients to connect:
 ## Troubleshooting
 
 ### "Command not found: github-code-retrieval"
-Make sure pip's bin directory is in your PATH:
+
+This happens when Python's Scripts folder isn't in your PATH. Choose one of these solutions:
+
+**Solution 1: Use pipx (Recommended)**
 ```bash
-# Find where pip installs scripts
-python -m site --user-base
-# Add that path + /bin to your PATH
+pip install pipx
+pipx ensurepath
+pipx install github-code-retrieval
+# Restart your terminal
 ```
 
-Or use the full path:
+**Solution 2: Add Scripts folder to PATH**
+
+Find your Scripts folder:
+```bash
+python -m site --user-base
+```
+
+Then add the Scripts subfolder to your PATH:
+
+| OS | Typical Scripts Location |
+|----|-------------------------|
+| Windows | `C:\Users\<username>\AppData\Roaming\Python\Python3XX\Scripts` |
+| macOS/Linux | `~/.local/bin` |
+
+**Solution 3: Use full path in config**
+
+Find the full path to the executable:
+```bash
+# Windows (PowerShell)
+python -c "import sysconfig; print(sysconfig.get_path('scripts'))"
+
+# macOS/Linux
+which github-code-retrieval || python -m site --user-base
+```
+
+Then use the full path in your config:
+```json
+{
+  "mcpServers": {
+    "github-code-retrieval": {
+      "command": "C:/Users/YourName/AppData/Roaming/Python/Python313/Scripts/github-code-retrieval.exe",
+      "args": []
+    }
+  }
+}
+```
+
+**Solution 4: Use python -m (Always works)**
 ```json
 {
   "mcpServers": {
@@ -261,6 +286,11 @@ Or use the full path:
     }
   }
 }
+```
+
+For Claude Code CLI with python -m:
+```bash
+claude mcp add github-code-retrieval -s user -- python -m mcp_stdio_server
 ```
 
 ### Out of memory
