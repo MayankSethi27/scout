@@ -1,31 +1,17 @@
 """
-Services Layer for GitHub Codebase Analyst
-==========================================
+Services Layer - Code Navigation Tools.
 
-Services handle the core business logic and external integrations:
-
-- EmbeddingService: Generates vector embeddings from text/code
-- VectorStore: Stores and searches embeddings (ChromaDB/Pinecone)
-- RepoService: Manages repository operations
-- IndexingService: Orchestrates the indexing pipeline
-
-DEPENDENCY FLOW:
-----------------
-    EmbeddingService ──┐
-                       ├──► IndexingService
-    VectorStore ───────┘
-         │
-         └──► Used by Search Tool
+- navigator: File search, code search, directory listing, file reading
+- overview: Repository overview and stack detection
+- repo_service: GitHub URL parsing and shallow cloning
 """
 
-from app.services.embedding_service import EmbeddingService
-from app.services.vector_store import VectorStore
 from app.services.repo_service import RepoService
-from app.services.indexing_service import IndexingService
+from app.services import navigator
+from app.services import overview
 
 __all__ = [
-    "EmbeddingService",
-    "VectorStore",
     "RepoService",
-    "IndexingService",
+    "navigator",
+    "overview",
 ]

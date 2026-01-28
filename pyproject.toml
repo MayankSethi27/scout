@@ -1,14 +1,11 @@
 [project]
-name = "github-code-retrieval"
-version = "2.0.0"
-description = "MCP server for GitHub code retrieval - semantic search for Claude Desktop & Claude Code CLI"
+name = "scout-code-navigator"
+version = "3.0.0"
+description = "MCP server for fast, incremental code navigation - no indexing, no embeddings, no waiting"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
-authors = [
-    {name = "Your Name", email = "your.email@example.com"}
-]
-keywords = ["mcp", "model-context-protocol", "github", "code-search", "semantic-search", "cursor", "claude", "claude-desktop", "claude-code", "embeddings"]
+keywords = ["mcp", "model-context-protocol", "code-navigation", "code-search", "claude", "claude-desktop", "claude-code", "ripgrep"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -20,20 +17,11 @@ classifiers = [
 ]
 
 dependencies = [
-    # MCP (Model Context Protocol) - Required for Claude Desktop & Claude Code
     "mcp>=1.0.0",
-    # Local embeddings - no API keys required
-    "sentence-transformers>=2.2.2",
-    "torch>=2.0.0",
-    # Vector store
-    "chromadb>=0.4.22",
-    # HTTP Server (optional network mode)
     "fastapi>=0.109.0",
     "uvicorn[standard]>=0.27.0",
-    # Core utilities
     "pydantic>=2.5.0",
     "pydantic-settings>=2.1.0",
-    "httpx>=0.26.0",
     "python-dotenv>=1.0.0",
 ]
 
@@ -48,15 +36,8 @@ dev = [
 ]
 
 [project.scripts]
-# Primary: MCP stdio server for Claude Desktop & Claude Code CLI
-github-code-retrieval = "mcp_stdio_server:run"
-# Alternative: HTTP server for network access
-github-code-retrieval-http = "mcp_server:main"
-
-[project.urls]
-Homepage = "https://github.com/yourusername/github-code-retrieval"
-Repository = "https://github.com/yourusername/github-code-retrieval"
-Issues = "https://github.com/yourusername/github-code-retrieval/issues"
+scout = "mcp_stdio_server:run"
+scout-http = "mcp_server:main"
 
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]

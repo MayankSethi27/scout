@@ -1,33 +1,16 @@
-# =============================================================================
-# GitHub Code Retrieval - MCP Server for Claude Desktop & Claude Code CLI
-# =============================================================================
-#
-# FULLY LOCAL - No API keys required
-# All embeddings run locally using sentence-transformers
-#
-# Install: pip install -r requirements.txt
-# =============================================================================
+# Scout Code Navigator - Dependencies
+# Lightweight: no ML models, no vector DB
 
-# MCP (Model Context Protocol) - Required for Claude integration
+# MCP (Model Context Protocol) - Claude integration
 mcp>=1.0.0
 
-# HTTP Server Framework (for network mode)
+# HTTP Server (optional, for network mode)
 fastapi>=0.109.0
 uvicorn[standard]>=0.27.0
-
-# Local Embeddings - No API keys needed
-sentence-transformers>=2.2.2
-torch>=2.0.0
-
-# Vector store - Semantic search
-chromadb>=0.4.22
 
 # Data validation
 pydantic>=2.5.0
 pydantic-settings>=2.1.0
-
-# HTTP client (for git operations)
-httpx>=0.26.0
 
 # Environment configuration
 python-dotenv>=1.0.0

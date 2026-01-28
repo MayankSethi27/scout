@@ -1,37 +1,27 @@
 #!/usr/bin/env python3
 """
-MCP Server (stdio) - GitHub Code Retrieval for Claude Desktop.
+MCP Code Navigator - Local code exploration tools for LLMs.
 
-This MCP server provides Claude with direct access to GitHub codebases
-using the standard MCP stdio protocol for Claude Desktop integration.
+Provides fast, incremental code navigation tools over MCP stdio protocol.
+Think like a senior engineer: browse structure, search for patterns,
+read specific files. No indexing, no embeddings, no waiting.
 
-FULLY LOCAL:
-- No API keys required
-- No network calls for embeddings
-- Uses sentence-transformers/all-MiniLM-L6-v2 for local embeddings
+Tools:
+    repo_overview  - High-level repo structure, README, stack detection
+    list_directory - Browse directory contents with depth control
+    search_code    - Ripgrep-powered regex search across codebase
+    read_file      - Read file content with optional line ranges
+    find_files     - Find files matching glob patterns
 
-Install:
-    pip install github-code-retrieval
-
-Add to Claude Desktop config (~/.config/claude/claude_desktop_config.json):
-    {
-      "mcpServers": {
-        "github-code-retrieval": {
-          "command": "github-code-retrieval"
-        }
-      }
-    }
-
-Tool: analyze_github_repo
-  - Clones and indexes GitHub repositories
-  - Performs semantic search for relevant code
-  - Returns structured code snippets with full context
+Works with:
+    - Local directories (instant)
+    - GitHub URLs (shallow clone on first use, cached after)
 """
 
 import asyncio
 import logging
+import os
 import sys
-from datetime import datetime
 from typing import Any
 
 try:
@@ -39,367 +29,408 @@ try:
     from mcp.server.stdio import stdio_server
     from mcp.types import TextContent, Tool
 except ImportError as e:
-    print(f"Error: MCP package not installed. Install with: pip install mcp>=1.0.0", file=sys.stderr)
+    print("Error: MCP package not installed. Install with: pip install mcp>=1.0.0", file=sys.stderr)
     print(f"Details: {e}", file=sys.stderr)
     sys.exit(1)
 
-from pydantic import BaseModel, Field, ValidationError
-
 from app.core.config import get_settings
-from app.services.embedding_service import EmbeddingService, EmbeddingConfig
-from app.services.vector_store import VectorStore, VectorStoreConfig
 from app.services.repo_service import RepoService, RepoServiceConfig
-from app.services.indexing_service import IndexingService, IndexingConfig
+from app.services import navigator
+from app.services.overview import get_overview
 
-# Configure logging to stderr (stdout is for MCP protocol)
+# Logging to stderr (stdout is MCP protocol)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     stream=sys.stderr,
 )
-logger = logging.getLogger("mcp_code_retrieval")
+logger = logging.getLogger("scout")
 
-
-# =============================================================================
-# SERVICE INITIALIZATION (Fully Local - No API Keys)
-# =============================================================================
-
-_embedding_service: EmbeddingService | None = None
-_vector_store: VectorStore | None = None
+# Lazy-initialized repo service
 _repo_service: RepoService | None = None
-_indexing_service: IndexingService | None = None
 
 
-def get_embedding_service() -> EmbeddingService:
-    global _embedding_service
-    if _embedding_service is None:
-        settings = get_settings()
-        config = EmbeddingConfig(
-            model=settings.embedding_model,
-            dimension=settings.embedding_dimension,
-            device=settings.embedding_device
-        )
-        _embedding_service = EmbeddingService(config=config)
-    return _embedding_service
-
-
-def get_vector_store() -> VectorStore:
-    global _vector_store
-    if _vector_store is None:
-        settings = get_settings()
-        config = VectorStoreConfig(
-            backend=settings.vector_store_backend,
-            collection_name=settings.vector_store_collection,
-            persist_directory=settings.vector_store_path
-        )
-        _vector_store = VectorStore(config=config)
-    return _vector_store
-
-
-def get_repo_service() -> RepoService:
+def _get_repo_service() -> RepoService:
     global _repo_service
     if _repo_service is None:
         settings = get_settings()
-        config = RepoServiceConfig(
+        _repo_service = RepoService(RepoServiceConfig(
             storage_path=settings.repo_storage_path,
             cache_ttl_hours=settings.repo_cache_ttl_hours,
-            max_repo_size_mb=settings.repo_max_size_mb
-        )
-        _repo_service = RepoService(config=config)
+            clone_timeout_seconds=settings.repo_clone_timeout_seconds,
+        ))
     return _repo_service
 
 
-def get_indexing_service() -> IndexingService:
-    global _indexing_service
-    if _indexing_service is None:
-        settings = get_settings()
-        config = IndexingConfig(
-            chunk_size=settings.chunk_size,
-            chunk_overlap=settings.chunk_overlap,
-            max_file_size_kb=settings.max_file_size_kb,
-            batch_size=settings.indexing_batch_size
-        )
-        _indexing_service = IndexingService(
-            embedding_service=get_embedding_service(),
-            vector_store=get_vector_store(),
-            repo_service=get_repo_service(),
-            config=config
-        )
-    return _indexing_service
+# =============================================================================
+# TOOL DEFINITIONS
+# =============================================================================
+
+TOOLS = [
+    Tool(
+        name="repo_overview",
+        description=(
+            "Get a high-level overview of a repository: directory tree, "
+            "README content, detected tech stack (languages, frameworks, tools), "
+            "file statistics, and entry points. Use this FIRST when exploring "
+            "an unfamiliar codebase. Accepts local paths or GitHub URLs."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Local directory path or GitHub URL (e.g., /path/to/repo or https://github.com/owner/repo)"
+                },
+            },
+            "required": ["path"],
+        },
+    ),
+    Tool(
+        name="list_directory",
+        description=(
+            "List contents of a directory with depth control. Shows files and "
+            "subdirectories as a tree. Use to explore specific parts of a codebase."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Directory path to list"
+                },
+                "depth": {
+                    "type": "integer",
+                    "description": "How many levels deep to show (default: 2)",
+                    "default": 2,
+                    "minimum": 1,
+                    "maximum": 10,
+                },
+            },
+            "required": ["path"],
+        },
+    ),
+    Tool(
+        name="search_code",
+        description=(
+            "Search for a regex pattern across the codebase using ripgrep. "
+            "Returns matching lines with file paths, line numbers, and context. "
+            "Fast even on very large repos (100k+ files). "
+            "Use to find function definitions, imports, error handling, etc."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Regex pattern to search for (e.g., 'def authenticate', 'import.*jwt', 'TODO')"
+                },
+                "path": {
+                    "type": "string",
+                    "description": "Directory to search in"
+                },
+                "file_type": {
+                    "type": "string",
+                    "description": "Filter by language (e.g., 'python', 'js', 'ts', 'go', 'rust', 'java')"
+                },
+                "ignore_case": {
+                    "type": "boolean",
+                    "description": "Case-insensitive search (default: false)",
+                    "default": False,
+                },
+                "max_results": {
+                    "type": "integer",
+                    "description": "Max matches to return (default: 50)",
+                    "default": 50,
+                    "minimum": 1,
+                    "maximum": 200,
+                },
+            },
+            "required": ["query", "path"],
+        },
+    ),
+    Tool(
+        name="read_file",
+        description=(
+            "Read the contents of a file with line numbers. Optionally read "
+            "only a specific line range. Use after search_code to examine "
+            "specific files, or to read config files, READMEs, etc."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Path to the file to read"
+                },
+                "start_line": {
+                    "type": "integer",
+                    "description": "Start reading from this line (1-indexed, inclusive)",
+                    "minimum": 1,
+                },
+                "end_line": {
+                    "type": "integer",
+                    "description": "Stop reading at this line (1-indexed, inclusive)",
+                    "minimum": 1,
+                },
+            },
+            "required": ["path"],
+        },
+    ),
+    Tool(
+        name="find_files",
+        description=(
+            "Find files matching a glob pattern. Use to locate files by name "
+            "or extension. Examples: '**/*.py', 'src/**/*.ts', '**/test_*.py', "
+            "'**/config.*', 'docker-compose*.yml'"
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "pattern": {
+                    "type": "string",
+                    "description": "Glob pattern (e.g., '**/*.py', 'src/**/*.ts')"
+                },
+                "path": {
+                    "type": "string",
+                    "description": "Base directory to search from"
+                },
+                "max_results": {
+                    "type": "integer",
+                    "description": "Max files to return (default: 100)",
+                    "default": 100,
+                    "minimum": 1,
+                    "maximum": 500,
+                },
+            },
+            "required": ["pattern", "path"],
+        },
+    ),
+]
 
 
 # =============================================================================
-# INPUT/OUTPUT SCHEMAS
+# TOOL HANDLERS
 # =============================================================================
 
 
-class AnalyzeRepoInput(BaseModel):
-    repo_url: str = Field(
-        ...,
-        description="GitHub repository URL (e.g., https://github.com/owner/repo)",
-        min_length=10,
+async def handle_repo_overview(args: dict[str, Any]) -> str:
+    """Handle repo_overview tool call."""
+    path_or_url = args["path"]
+
+    # Resolve path (handles both local and GitHub URLs)
+    repo_service = _get_repo_service()
+    try:
+        local_path = await repo_service.resolve_path(path_or_url)
+    except ValueError as e:
+        return f"Error: {e}"
+    except (TimeoutError, RuntimeError) as e:
+        return f"Error cloning repository: {e}"
+
+    overview = get_overview(local_path)
+
+    if overview.error:
+        return f"Error: {overview.error}"
+
+    # Build output
+    parts = []
+    parts.append(f"# Repository: {overview.name}")
+    parts.append(f"Local path: {overview.path}")
+    parts.append("")
+
+    # Stack
+    if overview.stack.languages or overview.stack.frameworks or overview.stack.tools:
+        parts.append("## Tech Stack")
+        if overview.stack.languages:
+            parts.append(f"Languages: {', '.join(overview.stack.languages)}")
+        if overview.stack.frameworks:
+            parts.append(f"Frameworks: {', '.join(overview.stack.frameworks)}")
+        if overview.stack.tools:
+            parts.append(f"Tools: {', '.join(overview.stack.tools)}")
+        parts.append("")
+
+    # Stats
+    stats = overview.file_stats
+    parts.append(f"## Stats: {stats.get('total_files', 0)} files, {stats.get('total_size_mb', 0)} MB")
+    if stats.get("top_extensions"):
+        ext_str = ", ".join(f"{ext} ({count})" for ext, count in stats["top_extensions"][:10])
+        parts.append(f"Extensions: {ext_str}")
+    parts.append("")
+
+    # Entry points
+    if overview.entry_points:
+        parts.append(f"## Entry Points: {', '.join(overview.entry_points)}")
+        parts.append("")
+
+    # Config files
+    if overview.config_files:
+        parts.append(f"## Config Files: {', '.join(overview.config_files)}")
+        parts.append("")
+
+    # Tree
+    parts.append("## Directory Structure")
+    parts.append("```")
+    parts.append(overview.tree)
+    parts.append("```")
+    parts.append("")
+
+    # README
+    if overview.readme and overview.readme != "(No README found)":
+        parts.append("## README")
+        parts.append(overview.readme)
+
+    return "\n".join(parts)
+
+
+async def handle_list_directory(args: dict[str, Any]) -> str:
+    """Handle list_directory tool call."""
+    path = args["path"]
+    depth = args.get("depth", 2)
+
+    entries, total = navigator.list_directory(path, depth=depth)
+    if not entries:
+        return f"Directory is empty or not found: {path}"
+
+    tree = navigator.format_tree(entries)
+    name = os.path.basename(os.path.abspath(path))
+    return f"{name}/\n{tree}\n\n({total} entries shown)"
+
+
+async def handle_search_code(args: dict[str, Any]) -> str:
+    """Handle search_code tool call."""
+    result = await navigator.search_code(
+        pattern=args["query"],
+        path=args["path"],
+        file_type=args.get("file_type"),
+        max_results=args.get("max_results", 50),
+        context_lines=2,
+        ignore_case=args.get("ignore_case", False),
     )
-    question: str = Field(
-        ...,
-        description="Question or search query to find relevant code",
-        min_length=3,
-        max_length=1000,
+
+    if result.error:
+        return f"Error: {result.error}"
+
+    if not result.matches:
+        return f"No matches found for pattern: {result.pattern}"
+
+    parts = [f"Found {result.total_matches} matches for `{result.pattern}`"]
+    if result.truncated:
+        parts[0] += " (truncated)"
+    parts.append("")
+
+    current_file = None
+    for m in result.matches:
+        if m.file != current_file:
+            current_file = m.file
+            parts.append(f"### {m.file}")
+
+        parts.append(f"  {m.line_number}: {m.content}")
+        for ctx in m.context_after:
+            parts.append(f"       {ctx}")
+
+    return "\n".join(parts)
+
+
+async def handle_read_file(args: dict[str, Any]) -> str:
+    """Handle read_file tool call."""
+    result = navigator.read_file(
+        path=args["path"],
+        start_line=args.get("start_line"),
+        end_line=args.get("end_line"),
     )
-    top_k: int = Field(
-        default=10,
-        description="Number of code snippets to retrieve (1-30)",
-        ge=1,
-        le=30,
+
+    if result.error:
+        return f"Error: {result.error}"
+
+    parts = []
+    lang_str = f" [{result.language}]" if result.language else ""
+    range_str = ""
+    if args.get("start_line") or args.get("end_line"):
+        range_str = f" (lines {result.start_line}-{result.end_line})"
+
+    parts.append(f"## {os.path.basename(result.path)}{lang_str}{range_str}")
+    parts.append(f"Path: {result.path}")
+    parts.append(f"Total lines: {result.total_lines} | Size: {result.size_bytes} bytes")
+    parts.append("")
+    parts.append(result.content)
+
+    return "\n".join(parts)
+
+
+async def handle_find_files(args: dict[str, Any]) -> str:
+    """Handle find_files tool call."""
+    results = navigator.find_files(
+        pattern=args["pattern"],
+        path=args["path"],
+        max_results=args.get("max_results", 100),
     )
 
+    if not results:
+        return f"No files found matching pattern: {args['pattern']}"
 
-class CodeSnippet(BaseModel):
-    file_path: str = Field(..., description="Path to the file in the repository")
-    content: str = Field(..., description="The code content")
-    start_line: int | None = Field(None, description="Starting line number (1-indexed)")
-    end_line: int | None = Field(None, description="Ending line number (1-indexed)")
-    language: str = Field("", description="Programming language")
-    relevance_score: float = Field(..., description="Semantic similarity score (0-1)")
-    chunk_index: int = Field(0, description="Index of this chunk within the file")
+    parts = [f"Found {len(results)} files matching `{args['pattern']}`:", ""]
+    for f in results:
+        size_str = navigator._format_size(f.size)
+        parts.append(f"  {f.path} ({size_str})")
 
-
-class RepositoryInfo(BaseModel):
-    url: str
-    owner: str
-    name: str
-    local_path: str | None = None
-    total_files_indexed: int = 0
-    total_chunks: int = 0
-
-
-class AnalyzeRepoOutput(BaseModel):
-    success: bool = Field(..., description="Whether retrieval completed successfully")
-    repository: RepositoryInfo = Field(..., description="Repository information")
-    query: str = Field(..., description="The search query used")
-    code_snippets: list[CodeSnippet] = Field(
-        default_factory=list,
-        description="Retrieved code snippets ranked by relevance"
-    )
-    total_results: int = Field(0, description="Total number of snippets retrieved")
-    error: str | None = Field(None, description="Error message if failed")
-    retrieval_metadata: dict[str, Any] = Field(
-        default_factory=dict,
-        description="Metadata about the retrieval process"
-    )
+    return "\n".join(parts)
 
 
 # =============================================================================
-# MCP SERVER IMPLEMENTATION
+# TOOL DISPATCH
 # =============================================================================
+
+TOOL_HANDLERS = {
+    "repo_overview": handle_repo_overview,
+    "list_directory": handle_list_directory,
+    "search_code": handle_search_code,
+    "read_file": handle_read_file,
+    "find_files": handle_find_files,
+}
 
 
 def create_mcp_server() -> Server:
     """Create and configure the MCP server."""
-    server = Server("github-code-retrieval")
+    server = Server("scout-code-navigator")
 
     @server.list_tools()
     async def list_tools() -> list[Tool]:
-        return [
-            Tool(
-                name="analyze_github_repo",
-                description="""Retrieve relevant code from a GitHub repository to answer questions.
-
-This tool performs semantic code search and returns structured code context:
-1. Clones the repository (cached for performance)
-2. Indexes all code files using local embeddings (no API keys needed)
-3. Searches for code snippets relevant to your question
-4. Returns ranked code snippets with file paths and line numbers
-
-USE THIS TOOL when you need to:
-- Understand how a codebase works
-- Find specific implementations
-- Answer questions about code structure
-- Locate where functionality is defined
-
-Returns: List of relevant code snippets with file paths, line numbers, and relevance scores.""",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "repo_url": {
-                            "type": "string",
-                            "description": "GitHub repository URL (e.g., https://github.com/owner/repo)"
-                        },
-                        "question": {
-                            "type": "string",
-                            "description": "Question or search query to find relevant code"
-                        },
-                        "top_k": {
-                            "type": "integer",
-                            "description": "Number of code snippets to retrieve (default: 10, max: 30)",
-                            "default": 10,
-                            "minimum": 1,
-                            "maximum": 30
-                        }
-                    },
-                    "required": ["repo_url", "question"]
-                }
-            )
-        ]
+        return TOOLS
 
     @server.call_tool()
     async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
-        if name != "analyze_github_repo":
-            raise ValueError(f"Unknown tool: {name}")
-        return await handle_analyze_repo(arguments)
+        handler = TOOL_HANDLERS.get(name)
+        if not handler:
+            return [TextContent(type="text", text=f"Unknown tool: {name}")]
+
+        try:
+            result = await handler(arguments)
+            return [TextContent(type="text", text=result)]
+        except Exception as e:
+            logger.exception(f"Error in tool {name}: {e}")
+            return [TextContent(type="text", text=f"Error: {e}")]
 
     return server
 
 
-async def handle_analyze_repo(arguments: dict[str, Any]) -> list[TextContent]:
-    """Handle the analyze_github_repo tool call."""
-    start_time = datetime.utcnow()
-
-    try:
-        # Validate input
-        try:
-            input_data = AnalyzeRepoInput(**arguments)
-        except ValidationError as e:
-            output = AnalyzeRepoOutput(
-                success=False,
-                repository=RepositoryInfo(url="", owner="", name=""),
-                query=arguments.get("question", ""),
-                error=f"Invalid input: {e.errors()}"
-            )
-            return [TextContent(type="text", text=output.model_dump_json(indent=2))]
-
-        logger.info(f"Retrieving code from: {input_data.repo_url}")
-        logger.info(f"Query: {input_data.question[:100]}...")
-
-        # Get services
-        repo_service = get_repo_service()
-        indexing_service = get_indexing_service()
-        embedding_service = get_embedding_service()
-        vector_store = get_vector_store()
-
-        # Parse repository URL
-        try:
-            repo_info = repo_service.parse_github_url(input_data.repo_url)
-        except ValueError as e:
-            output = AnalyzeRepoOutput(
-                success=False,
-                repository=RepositoryInfo(url=input_data.repo_url, owner="", name=""),
-                query=input_data.question,
-                error=f"Invalid repository URL: {e}"
-            )
-            return [TextContent(type="text", text=output.model_dump_json(indent=2))]
-
-        # Index repository if needed
-        index_stats = {"total_files": 0, "total_chunks": 0}
-        if not indexing_service.is_indexed(input_data.repo_url):
-            logger.info("Repository not indexed, starting indexing...")
-            index_result = await indexing_service.index_repository(input_data.repo_url)
-
-            if not index_result.success:
-                output = AnalyzeRepoOutput(
-                    success=False,
-                    repository=RepositoryInfo(
-                        url=input_data.repo_url,
-                        owner=repo_info.owner,
-                        name=repo_info.name
-                    ),
-                    query=input_data.question,
-                    error=f"Indexing failed: {'; '.join(index_result.errors)}"
-                )
-                return [TextContent(type="text", text=output.model_dump_json(indent=2))]
-
-            index_stats = {
-                "total_files": index_result.indexed_files,
-                "total_chunks": index_result.total_chunks
-            }
-            logger.info(f"Indexed {index_result.indexed_files} files, {index_result.total_chunks} chunks")
-
-        # Perform semantic search
-        logger.info(f"Searching for relevant code (top_k={input_data.top_k})...")
-        query_embedding = await embedding_service.embed(input_data.question)
-
-        raw_results = await vector_store.search(
-            embedding=query_embedding,
-            top_k=input_data.top_k
-        )
-
-        # Convert to structured snippets
-        code_snippets = []
-        for result in raw_results:
-            metadata = result.get("metadata", {})
-            snippet = CodeSnippet(
-                file_path=metadata.get("file_path", "unknown"),
-                content=result.get("content", ""),
-                start_line=metadata.get("start_line"),
-                end_line=metadata.get("end_line"),
-                language=metadata.get("language", ""),
-                relevance_score=round(result.get("score", 0), 4),
-                chunk_index=metadata.get("chunk_index", 0)
-            )
-            code_snippets.append(snippet)
-
-        # Calculate duration
-        duration = (datetime.utcnow() - start_time).total_seconds()
-
-        # Build output
-        settings = get_settings()
-        output = AnalyzeRepoOutput(
-            success=True,
-            repository=RepositoryInfo(
-                url=input_data.repo_url,
-                owner=repo_info.owner,
-                name=repo_info.name,
-                total_files_indexed=index_stats.get("total_files", 0),
-                total_chunks=index_stats.get("total_chunks", 0)
-            ),
-            query=input_data.question,
-            code_snippets=code_snippets,
-            total_results=len(code_snippets),
-            retrieval_metadata={
-                "duration_seconds": round(duration, 2),
-                "top_k_requested": input_data.top_k,
-                "embedding_model": settings.embedding_model,
-                "fully_local": True,
-            }
-        )
-
-        logger.info(f"Retrieved {len(code_snippets)} snippets in {duration:.2f}s")
-
-        return [TextContent(type="text", text=output.model_dump_json(indent=2))]
-
-    except Exception as e:
-        logger.exception(f"Error during retrieval: {e}")
-        output = AnalyzeRepoOutput(
-            success=False,
-            repository=RepositoryInfo(url=arguments.get("repo_url", ""), owner="", name=""),
-            query=arguments.get("question", ""),
-            error=str(e),
-            retrieval_metadata={"exception_type": type(e).__name__}
-        )
-        return [TextContent(type="text", text=output.model_dump_json(indent=2))]
-
-
 # =============================================================================
-# MAIN ENTRY POINT
+# ENTRY POINTS
 # =============================================================================
 
 
 async def main():
-    """Main async entry point for the MCP server."""
+    """Main async entry point."""
     settings = get_settings()
-
-    logger.info(f"Starting {settings.app_name} MCP Server v{settings.app_version}")
-    logger.info(f"Embedding model: {settings.embedding_model} (local)")
-    logger.info("Mode: Fully local - no API keys required")
+    logger.info(f"Starting {settings.app_name} v{settings.app_version}")
+    logger.info("Tools: repo_overview, list_directory, search_code, read_file, find_files")
 
     server = create_mcp_server()
-
-    logger.info("MCP Server ready, waiting for connections...")
 
     async with stdio_server() as (read_stream, write_stream):
         await server.run(
             read_stream,
             write_stream,
-            server.create_initialization_options()
+            server.create_initialization_options(),
         )
 
 
