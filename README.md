@@ -1,4 +1,4 @@
-# Scout Code Navigator
+# Scout 
 
 **Give Claude the ability to actually read, search, and understand any codebase.**
 
@@ -144,12 +144,6 @@ Once configured, just ask Claude to analyze any repo:
 "Explore my local project at /path/to/my/project"
 ```
 
-Claude will automatically use the tools to:
-1. Clone the repository (GitHub URLs are shallow-cloned and cached for 24h)
-2. Browse the directory structure and detect the tech stack
-3. Search for relevant code patterns with regex
-4. Read specific files and return actual code snippets
-
 ## How It Works
 
 ```
@@ -220,21 +214,6 @@ Then configure Claude Code CLI to connect:
 claude mcp add --transport http scout http://localhost:8000
 ```
 
-API endpoints:
-- `POST /repo_overview` - Repository overview
-- `POST /list_directory` - Browse directory
-- `POST /search_code` - Regex code search
-- `POST /read_file` - Read file contents
-- `POST /find_files` - Glob file search
-- `GET /health` - Health check
-
-## Docker
-
-```bash
-docker-compose up --build
-# Server available at http://localhost:8000
-```
-
 ## Troubleshooting
 
 **"Command not found: scout"** - Python's Scripts folder isn't in your PATH. Easiest fix:
@@ -288,4 +267,5 @@ python mcp_server.py
 
 ## License
 
-MIT
+- MIT
+- Claude Code
