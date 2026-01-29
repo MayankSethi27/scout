@@ -216,18 +216,23 @@ TOOLS = [
 
 async def handle_repo_overview(args: dict[str, Any]) -> str:
     """Handle repo_overview tool call."""
+    import time
     path_or_url = args["path"]
 
     # Resolve path (handles both local and GitHub URLs)
     repo_service = _get_repo_service()
     try:
+        t0 = time.time()
         local_path = await repo_service.resolve_path(path_or_url)
+        clone_time = time.time() - t0
     except ValueError as e:
         return f"Error: {e}"
     except (TimeoutError, RuntimeError) as e:
         return f"Error cloning repository: {e}"
 
+    t1 = time.time()
     overview = get_overview(local_path)
+    scan_time = time.time() - t1
 
     if overview.error:
         return f"Error: {overview.error}"
@@ -278,6 +283,9 @@ async def handle_repo_overview(args: dict[str, Any]) -> str:
     if overview.readme and overview.readme != "(No README found)":
         parts.append("## README")
         parts.append(overview.readme)
+
+    parts.append("")
+    parts.append(f"---\n_Timing: clone/resolve {clone_time:.1f}s, scan {scan_time:.1f}s, total {clone_time + scan_time:.1f}s_")
 
     return "\n".join(parts)
 

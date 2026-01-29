@@ -11,6 +11,7 @@ import asyncio
 import hashlib
 import shutil
 import stat
+import subprocess
 import os
 from pathlib import Path
 from typing import Optional, Dict
@@ -146,6 +147,7 @@ class RepoService:
 
     async def clone(self, url: str, force: bool = False) -> RepoInfo:
         """Shallow clone a GitHub repository (cached)."""
+        import time
         repo_info = parse_github_url(url)
         cache_key = f"{repo_info.owner}/{repo_info.name}"
 
@@ -158,18 +160,18 @@ class RepoService:
 
         local_path = self._get_local_path(repo_info)
 
-        # Clone with retry
+        # Clone with retry (synchronous to avoid asyncio issues on Windows)
         last_error = None
         for attempt in range(3):
             try:
-                await self._execute_clone(repo_info, local_path)
+                self._execute_clone_sync(repo_info, local_path)
                 break
             except (TimeoutError, RuntimeError) as e:
                 last_error = e
                 if attempt < 2:
                     if local_path.exists():
                         _safe_rmtree(local_path)
-                    await asyncio.sleep(2 ** attempt)
+                    time.sleep(2 ** attempt)
         else:
             raise last_error
 
@@ -178,8 +180,8 @@ class RepoService:
         self._cache[cache_key] = repo_info
         return repo_info
 
-    async def _execute_clone(self, repo_info: RepoInfo, target: Path) -> None:
-        """Execute a shallow git clone."""
+    def _execute_clone_sync(self, repo_info: RepoInfo, target: Path) -> None:
+        """Execute a shallow git clone (synchronous)."""
         if target.exists():
             _safe_rmtree(target)
 
@@ -191,24 +193,20 @@ class RepoService:
         env = os.environ.copy()
         env["GIT_TERMINAL_PROMPT"] = "0"
 
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=env,
-        )
-
         try:
-            stdout, stderr = await asyncio.wait_for(
-                process.communicate(),
+            result = subprocess.run(
+                cmd,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=env,
                 timeout=self.config.clone_timeout_seconds,
             )
-        except asyncio.TimeoutError:
-            process.kill()
+        except subprocess.TimeoutExpired:
             raise TimeoutError(f"Clone timed out after {self.config.clone_timeout_seconds}s")
 
-        if process.returncode != 0:
-            raise RuntimeError(f"Git clone failed: {stderr.decode()}")
+        if result.returncode != 0:
+            raise RuntimeError(f"Git clone failed: {result.stderr.decode()}")
 
     def _get_local_path(self, repo_info: RepoInfo) -> Path:
         url_hash = hashlib.md5(repo_info.url.encode()).hexdigest()[:8]
