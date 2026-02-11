@@ -6,9 +6,8 @@ Services Layer - Code Navigation Tools.
 - repo_service: GitHub URL parsing and shallow cloning
 """
 
+from app.services import navigator, overview
 from app.services.repo_service import RepoService
-from app.services import navigator
-from app.services import overview
 
 __all__ = [
     "RepoService",

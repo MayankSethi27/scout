@@ -9,20 +9,21 @@ Handles:
 
 import asyncio
 import hashlib
+import os
+import re
 import shutil
 import stat
 import subprocess
-import os
-from pathlib import Path
-from typing import Optional, Dict
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-import re
+from pathlib import Path
+from typing import Dict, Optional
 
 
 def _remove_readonly(func, path, excinfo):
     """Error handler for shutil.rmtree on Windows (read-only .git files)."""
     import time
+
     exc_type = excinfo[0] if excinfo else None
     if exc_type in (PermissionError, OSError):
         for attempt in range(3):
@@ -39,6 +40,7 @@ def _remove_readonly(func, path, excinfo):
 def _safe_rmtree(path: Path) -> None:
     """Safely remove a directory tree, handling Windows permission issues."""
     import gc
+
     if not path.exists():
         return
     gc.collect()
@@ -49,6 +51,7 @@ def _safe_rmtree(path: Path) -> None:
         except (PermissionError, OSError):
             if attempt < 2:
                 import time
+
                 time.sleep(0.5 * (attempt + 1))
                 gc.collect()
 
@@ -56,6 +59,7 @@ def _safe_rmtree(path: Path) -> None:
 @dataclass
 class RepoInfo:
     """Parsed repository information."""
+
     owner: str
     name: str
     url: str
@@ -67,6 +71,7 @@ class RepoInfo:
 @dataclass
 class RepoServiceConfig:
     """Configuration for repository service."""
+
     storage_path: str = "./data/repos"
     cache_ttl_hours: int = 24
     clone_timeout_seconds: int = 300
@@ -101,7 +106,8 @@ def parse_github_url(url: str) -> RepoInfo:
             name = groups[1].replace(".git", "")
             branch = groups[2] if len(groups) > 2 else None
             return RepoInfo(
-                owner=owner, name=name,
+                owner=owner,
+                name=name,
                 url=f"https://github.com/{owner}/{name}",
                 branch=branch,
             )
@@ -148,6 +154,7 @@ class RepoService:
     async def clone(self, url: str, force: bool = False) -> RepoInfo:
         """Shallow clone a GitHub repository (cached)."""
         import time
+
         repo_info = parse_github_url(url)
         cache_key = f"{repo_info.owner}/{repo_info.name}"
 
@@ -171,7 +178,7 @@ class RepoService:
                 if attempt < 2:
                     if local_path.exists():
                         _safe_rmtree(local_path)
-                    time.sleep(2 ** attempt)
+                    time.sleep(2**attempt)
         else:
             raise last_error
 
@@ -203,7 +210,9 @@ class RepoService:
                 timeout=self.config.clone_timeout_seconds,
             )
         except subprocess.TimeoutExpired:
-            raise TimeoutError(f"Clone timed out after {self.config.clone_timeout_seconds}s")
+            raise TimeoutError(
+                f"Clone timed out after {self.config.clone_timeout_seconds}s"
+            )
 
         if result.returncode != 0:
             raise RuntimeError(f"Git clone failed: {result.stderr.decode()}")

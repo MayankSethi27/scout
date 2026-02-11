@@ -143,12 +143,8 @@ class TestRepoOverviewEndpoint:
     def test_local_path(self, client, sample_project):
         with patch("mcp_server._get_repo_service") as mock_svc:
             mock_instance = mock_svc.return_value
-            mock_instance.resolve_path = AsyncMock(
-                return_value=str(sample_project)
-            )
-            resp = client.post(
-                "/repo_overview", json={"path": str(sample_project)}
-            )
+            mock_instance.resolve_path = AsyncMock(return_value=str(sample_project))
+            resp = client.post("/repo_overview", json={"path": str(sample_project)})
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True

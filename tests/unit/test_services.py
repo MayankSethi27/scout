@@ -18,7 +18,6 @@ from app.services.navigator import (
     search_code,
 )
 
-
 # ── detect_language ──────────────────────────────────────────────────────────
 
 
@@ -235,9 +234,7 @@ class TestFormatTree:
         child = DirectoryEntry(
             name="inner.py", path="dir/inner.py", is_dir=False, size=50
         )
-        parent = DirectoryEntry(
-            name="dir", path="dir", is_dir=True, children=[child]
-        )
+        parent = DirectoryEntry(name="dir", path="dir", is_dir=True, children=[child])
         tree = format_tree([parent])
         assert "dir/" in tree
         assert "inner.py" in tree
@@ -272,9 +269,7 @@ class TestSearchCodePythonFallback:
 
     @pytest.mark.asyncio
     async def test_file_type_filter(self, sample_project):
-        result = await search_code(
-            "import", str(sample_project), file_type="python"
-        )
+        result = await search_code("import", str(sample_project), file_type="python")
         for m in result.matches:
             assert m.file.endswith(".py")
 
@@ -285,9 +280,7 @@ class TestSearchCodePythonFallback:
 
     @pytest.mark.asyncio
     async def test_context_lines(self, sample_project):
-        result = await search_code(
-            "def add", str(sample_project), context_lines=1
-        )
+        result = await search_code("def add", str(sample_project), context_lines=1)
         if result.matches:
             m = result.matches[0]
             assert isinstance(m.context_after, list)

@@ -10,17 +10,16 @@ Scans a repository to provide:
 
 import json
 import os
-from pathlib import Path
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Optional
 
 from app.services.navigator import (
-    list_directory,
-    format_tree,
-    SKIP_DIRS,
     EXTENSION_TO_LANGUAGE,
+    SKIP_DIRS,
+    format_tree,
+    list_directory,
 )
-
 
 # Config files that reveal the stack
 STACK_INDICATORS = {
@@ -146,6 +145,7 @@ PY_FRAMEWORKS = {
 @dataclass
 class StackInfo:
     """Detected technology stack."""
+
     languages: list[str] = field(default_factory=list)
     frameworks: list[str] = field(default_factory=list)
     tools: list[str] = field(default_factory=list)
@@ -154,6 +154,7 @@ class StackInfo:
 @dataclass
 class RepoOverview:
     """Complete repository overview."""
+
     path: str
     name: str
     tree: str
@@ -180,9 +181,14 @@ def get_overview(path: str, tree_depth: int = 3) -> RepoOverview:
 
     if not os.path.isdir(path):
         return RepoOverview(
-            path=path, name="", tree="", readme="",
-            stack=StackInfo(), file_stats={},
-            entry_points=[], config_files=[],
+            path=path,
+            name="",
+            tree="",
+            readme="",
+            stack=StackInfo(),
+            file_stats={},
+            entry_points=[],
+            config_files=[],
             error=f"Directory not found: {path}",
         )
 
@@ -222,8 +228,13 @@ def get_overview(path: str, tree_depth: int = 3) -> RepoOverview:
 def _find_and_read_readme(path: str) -> str:
     """Find and read the README file."""
     readme_names = [
-        "README.md", "readme.md", "README", "README.txt",
-        "README.rst", "Readme.md", "README.MD",
+        "README.md",
+        "readme.md",
+        "README",
+        "README.txt",
+        "README.rst",
+        "Readme.md",
+        "README.MD",
     ]
 
     for name in readme_names:
@@ -290,7 +301,14 @@ def _detect_stack(path: str) -> StackInfo:
                     if not line or line.startswith("#") or line.startswith("-"):
                         continue
                     # Extract package name (before version specifier)
-                    pkg_name = line.split(">=")[0].split("==")[0].split("<")[0].split(">")[0].split("[")[0].strip()
+                    pkg_name = (
+                        line.split(">=")[0]
+                        .split("==")[0]
+                        .split("<")[0]
+                        .split(">")[0]
+                        .split("[")[0]
+                        .strip()
+                    )
                     if pkg_name in PY_FRAMEWORKS:
                         frameworks.add(PY_FRAMEWORKS[pkg_name])
         except Exception:
@@ -349,14 +367,30 @@ def _get_file_stats(path: str) -> dict:
 def _find_entry_points(path: str) -> list[str]:
     """Find likely entry point files."""
     entry_names = [
-        "main.py", "app.py", "server.py", "index.py", "manage.py", "wsgi.py",
-        "index.js", "app.js", "server.js", "main.js",
-        "index.ts", "app.ts", "server.ts", "main.ts",
-        "main.go", "cmd/main.go",
-        "main.rs", "lib.rs",
-        "Main.java", "Application.java", "App.java",
+        "main.py",
+        "app.py",
+        "server.py",
+        "index.py",
+        "manage.py",
+        "wsgi.py",
+        "index.js",
+        "app.js",
+        "server.js",
+        "main.js",
+        "index.ts",
+        "app.ts",
+        "server.ts",
+        "main.ts",
+        "main.go",
+        "cmd/main.go",
+        "main.rs",
+        "lib.rs",
+        "Main.java",
+        "Application.java",
+        "App.java",
         "index.html",
-        "main.c", "main.cpp",
+        "main.c",
+        "main.cpp",
     ]
 
     found = []
@@ -378,14 +412,29 @@ def _find_entry_points(path: str) -> list[str]:
 def _find_config_files(path: str) -> list[str]:
     """List configuration files in the root directory."""
     config_extensions = {
-        ".json", ".yaml", ".yml", ".toml", ".cfg", ".ini",
-        ".env", ".config", ".rc",
+        ".json",
+        ".yaml",
+        ".yml",
+        ".toml",
+        ".cfg",
+        ".ini",
+        ".env",
+        ".config",
+        ".rc",
     }
     config_names = {
-        "Makefile", "Dockerfile", "Procfile", "Vagrantfile",
-        "Rakefile", "Gemfile", "Pipfile",
-        ".gitignore", ".dockerignore", ".editorconfig",
-        ".env.example", ".env.sample",
+        "Makefile",
+        "Dockerfile",
+        "Procfile",
+        "Vagrantfile",
+        "Rakefile",
+        "Gemfile",
+        "Pipfile",
+        ".gitignore",
+        ".dockerignore",
+        ".editorconfig",
+        ".env.example",
+        ".env.sample",
     }
 
     configs = []

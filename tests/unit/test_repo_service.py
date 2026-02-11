@@ -14,7 +14,6 @@ from app.services.repo_service import (
     parse_github_url,
 )
 
-
 # ── is_github_url ────────────────────────────────────────────────────────────
 
 
@@ -108,9 +107,7 @@ class TestRepoServiceResolveLocal:
             url="https://github.com/owner/repo",
             local_path=str(tmp_path),
         )
-        with patch.object(
-            svc, "clone", new_callable=AsyncMock, return_value=fake_info
-        ):
+        with patch.object(svc, "clone", new_callable=AsyncMock, return_value=fake_info):
             result = await svc.resolve_path("https://github.com/owner/repo")
             assert result == str(tmp_path)
 

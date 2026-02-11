@@ -20,15 +20,15 @@ import sys
 from contextlib import asynccontextmanager
 from typing import Any, Optional
 
+import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-import uvicorn
 
 from app.core.config import get_settings
-from app.services.repo_service import RepoService, RepoServiceConfig
 from app.services import navigator
 from app.services.overview import get_overview
+from app.services.repo_service import RepoService, RepoServiceConfig
 
 logging.basicConfig(
     level=logging.INFO,
@@ -45,11 +45,13 @@ def _get_repo_service() -> RepoService:
     global _repo_service
     if _repo_service is None:
         settings = get_settings()
-        _repo_service = RepoService(RepoServiceConfig(
-            storage_path=settings.repo_storage_path,
-            cache_ttl_hours=settings.repo_cache_ttl_hours,
-            clone_timeout_seconds=settings.repo_clone_timeout_seconds,
-        ))
+        _repo_service = RepoService(
+            RepoServiceConfig(
+                storage_path=settings.repo_storage_path,
+                cache_ttl_hours=settings.repo_cache_ttl_hours,
+                clone_timeout_seconds=settings.repo_clone_timeout_seconds,
+            )
+        )
     return _repo_service
 
 
@@ -139,7 +141,13 @@ async def health_check():
     return HealthResponse(
         status="ok",
         version=settings.app_version,
-        tools=["repo_overview", "list_directory", "search_code", "read_file", "find_files"],
+        tools=[
+            "repo_overview",
+            "list_directory",
+            "search_code",
+            "read_file",
+            "find_files",
+        ],
     )
 
 
@@ -163,7 +171,9 @@ async def repo_overview(req: RepoOverviewRequest):
             parts.append(f"Frameworks: {', '.join(overview.stack.frameworks)}")
 
         stats = overview.file_stats
-        parts.append(f"Files: {stats.get('total_files', 0)}, Size: {stats.get('total_size_mb', 0)} MB")
+        parts.append(
+            f"Files: {stats.get('total_files', 0)}, Size: {stats.get('total_size_mb', 0)} MB"
+        )
         parts.append("")
         parts.append(overview.tree)
 
@@ -185,7 +195,9 @@ async def list_dir(req: ListDirectoryRequest):
 
         tree = navigator.format_tree(entries)
         name = os.path.basename(os.path.abspath(req.path))
-        return ToolResponse(success=True, result=f"{name}/\n{tree}\n\n({total} entries)")
+        return ToolResponse(
+            success=True, result=f"{name}/\n{tree}\n\n({total} entries)"
+        )
     except Exception as e:
         return ToolResponse(success=False, result="", error=str(e))
 
@@ -247,7 +259,9 @@ async def find_files(req: FindFilesRequest):
         )
 
         if not results:
-            return ToolResponse(success=True, result=f"No files matching: {req.pattern}")
+            return ToolResponse(
+                success=True, result=f"No files matching: {req.pattern}"
+            )
 
         lines = [f"Found {len(results)} files:", ""]
         for f in results:

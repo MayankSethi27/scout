@@ -9,23 +9,42 @@ Provides CLI-style tools for navigating codebases without loading everything:
 """
 
 import asyncio
+import fnmatch
 import os
 import re
 import shutil
 import subprocess
-import fnmatch
-from pathlib import Path
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Optional
-
 
 # Directories to always skip during traversal
 SKIP_DIRS = {
-    ".git", "node_modules", "__pycache__", ".venv", "venv",
-    "dist", "build", ".next", "target", ".tox", ".mypy_cache",
-    ".pytest_cache", ".ruff_cache", "vendor", "bower_components",
-    ".gradle", ".idea", ".vs", ".vscode", "coverage", ".nyc_output",
-    "env", ".env", ".eggs", "*.egg-info",
+    ".git",
+    "node_modules",
+    "__pycache__",
+    ".venv",
+    "venv",
+    "dist",
+    "build",
+    ".next",
+    "target",
+    ".tox",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    "vendor",
+    "bower_components",
+    ".gradle",
+    ".idea",
+    ".vs",
+    ".vscode",
+    "coverage",
+    ".nyc_output",
+    "env",
+    ".env",
+    ".eggs",
+    "*.egg-info",
 }
 
 # Max file size to read (1MB)
@@ -35,6 +54,7 @@ MAX_READ_SIZE = 1_048_576
 @dataclass
 class SearchMatch:
     """A single search match."""
+
     file: str
     line_number: int
     content: str
@@ -45,6 +65,7 @@ class SearchMatch:
 @dataclass
 class SearchResult:
     """Result of a code search."""
+
     pattern: str
     matches: list[SearchMatch]
     total_matches: int
@@ -55,6 +76,7 @@ class SearchResult:
 @dataclass
 class FileContent:
     """Content of a read file."""
+
     path: str
     content: str
     start_line: int
@@ -68,6 +90,7 @@ class FileContent:
 @dataclass
 class DirectoryEntry:
     """An entry in a directory listing."""
+
     name: str
     path: str
     is_dir: bool
@@ -78,6 +101,7 @@ class DirectoryEntry:
 @dataclass
 class FileMatch:
     """A file found by glob search."""
+
     path: str
     size: int
     extension: str
@@ -85,35 +109,94 @@ class FileMatch:
 
 # Language detection by extension
 EXTENSION_TO_LANGUAGE = {
-    ".py": "python", ".js": "javascript", ".ts": "typescript",
-    ".jsx": "jsx", ".tsx": "tsx", ".java": "java", ".kt": "kotlin",
-    ".go": "go", ".rs": "rust", ".c": "c", ".cpp": "cpp", ".h": "c",
-    ".hpp": "cpp", ".cs": "csharp", ".rb": "ruby", ".php": "php",
-    ".swift": "swift", ".scala": "scala", ".r": "r", ".R": "r",
-    ".sql": "sql", ".sh": "shell", ".bash": "shell", ".zsh": "shell",
-    ".ps1": "powershell", ".yaml": "yaml", ".yml": "yaml",
-    ".json": "json", ".toml": "toml", ".xml": "xml", ".html": "html",
-    ".css": "css", ".scss": "scss", ".less": "less", ".md": "markdown",
-    ".rst": "rst", ".txt": "text", ".cfg": "ini", ".ini": "ini",
-    ".dockerfile": "dockerfile", ".tf": "terraform", ".hcl": "hcl",
-    ".proto": "protobuf", ".graphql": "graphql", ".gql": "graphql",
-    ".lua": "lua", ".dart": "dart", ".ex": "elixir", ".exs": "elixir",
-    ".erl": "erlang", ".hs": "haskell", ".ml": "ocaml",
-    ".vue": "vue", ".svelte": "svelte",
+    ".py": "python",
+    ".js": "javascript",
+    ".ts": "typescript",
+    ".jsx": "jsx",
+    ".tsx": "tsx",
+    ".java": "java",
+    ".kt": "kotlin",
+    ".go": "go",
+    ".rs": "rust",
+    ".c": "c",
+    ".cpp": "cpp",
+    ".h": "c",
+    ".hpp": "cpp",
+    ".cs": "csharp",
+    ".rb": "ruby",
+    ".php": "php",
+    ".swift": "swift",
+    ".scala": "scala",
+    ".r": "r",
+    ".R": "r",
+    ".sql": "sql",
+    ".sh": "shell",
+    ".bash": "shell",
+    ".zsh": "shell",
+    ".ps1": "powershell",
+    ".yaml": "yaml",
+    ".yml": "yaml",
+    ".json": "json",
+    ".toml": "toml",
+    ".xml": "xml",
+    ".html": "html",
+    ".css": "css",
+    ".scss": "scss",
+    ".less": "less",
+    ".md": "markdown",
+    ".rst": "rst",
+    ".txt": "text",
+    ".cfg": "ini",
+    ".ini": "ini",
+    ".dockerfile": "dockerfile",
+    ".tf": "terraform",
+    ".hcl": "hcl",
+    ".proto": "protobuf",
+    ".graphql": "graphql",
+    ".gql": "graphql",
+    ".lua": "lua",
+    ".dart": "dart",
+    ".ex": "elixir",
+    ".exs": "elixir",
+    ".erl": "erlang",
+    ".hs": "haskell",
+    ".ml": "ocaml",
+    ".vue": "vue",
+    ".svelte": "svelte",
 }
 
 # ripgrep file type flags (maps language name to rg --type flag)
 RG_TYPE_MAP = {
-    "python": "py", "javascript": "js", "typescript": "ts",
-    "java": "java", "go": "go", "rust": "rust", "c": "c",
-    "cpp": "cpp", "ruby": "ruby", "php": "php", "swift": "swift",
-    "scala": "scala", "sql": "sql", "shell": "sh",
-    "yaml": "yaml", "json": "json", "toml": "toml",
-    "xml": "xml", "html": "html", "css": "css",
-    "markdown": "md", "lua": "lua",
+    "python": "py",
+    "javascript": "js",
+    "typescript": "ts",
+    "java": "java",
+    "go": "go",
+    "rust": "rust",
+    "c": "c",
+    "cpp": "cpp",
+    "ruby": "ruby",
+    "php": "php",
+    "swift": "swift",
+    "scala": "scala",
+    "sql": "sql",
+    "shell": "sh",
+    "yaml": "yaml",
+    "json": "json",
+    "toml": "toml",
+    "xml": "xml",
+    "html": "html",
+    "css": "css",
+    "markdown": "md",
+    "lua": "lua",
     # shorthand aliases
-    "py": "py", "js": "js", "ts": "ts", "rb": "ruby",
-    "rs": "rust", "md": "md", "sh": "sh",
+    "py": "py",
+    "js": "js",
+    "ts": "ts",
+    "rb": "ruby",
+    "rs": "rust",
+    "md": "md",
+    "sh": "sh",
 }
 
 
@@ -194,8 +277,10 @@ async def search_code(
 
     if not os.path.isdir(path):
         return SearchResult(
-            pattern=pattern, matches=[], total_matches=0,
-            error=f"Directory not found: {path}"
+            pattern=pattern,
+            matches=[],
+            total_matches=0,
+            error=f"Directory not found: {path}",
         )
 
     if _has_ripgrep():
@@ -235,11 +320,22 @@ async def _search_with_rg(
             cmd.extend(["--glob", f"*.{file_type}"])
 
     # Skip common junk directories
-    for skip in ["node_modules", ".git", "__pycache__", ".venv", "venv",
-                  "dist", "build", ".next", "target"]:
+    for skip in [
+        "node_modules",
+        ".git",
+        "__pycache__",
+        ".venv",
+        "venv",
+        "dist",
+        "build",
+        ".next",
+        "target",
+    ]:
         cmd.extend(["--glob", f"!{skip}"])
 
-    cmd.extend(["--max-count", str(max_results * 2)])  # Get more than needed, dedup later
+    cmd.extend(
+        ["--max-count", str(max_results * 2)]
+    )  # Get more than needed, dedup later
     cmd.extend([pattern, path])
 
     try:
@@ -248,9 +344,7 @@ async def _search_with_rg(
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await asyncio.wait_for(
-            process.communicate(), timeout=30
-        )
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
 
         if process.returncode not in (0, 1):  # rg returns 1 for no matches
             # Might be a regex error, try fixed-string search
@@ -264,22 +358,21 @@ async def _search_with_rg(
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, stderr = await asyncio.wait_for(
-                process.communicate(), timeout=30
-            )
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
 
         output = stdout.decode("utf-8", errors="replace")
         return _parse_rg_output(pattern, output, path, max_results, context_lines)
 
     except asyncio.TimeoutError:
         return SearchResult(
-            pattern=pattern, matches=[], total_matches=0,
-            error="Search timed out after 30 seconds"
+            pattern=pattern,
+            matches=[],
+            total_matches=0,
+            error="Search timed out after 30 seconds",
         )
     except Exception as e:
         return SearchResult(
-            pattern=pattern, matches=[], total_matches=0,
-            error=f"Search failed: {e}"
+            pattern=pattern, matches=[], total_matches=0, error=f"Search failed: {e}"
         )
 
 
@@ -432,15 +525,17 @@ async def _search_with_python(
                         start = max(0, i - context_lines)
                         ctx_before = [l.rstrip("\n") for l in lines[start:i]]
                         end = min(len(lines), i + context_lines + 1)
-                        ctx_after = [l.rstrip("\n") for l in lines[i + 1:end]]
+                        ctx_after = [l.rstrip("\n") for l in lines[i + 1 : end]]
 
-                    matches.append(SearchMatch(
-                        file=rel_path,
-                        line_number=i + 1,
-                        content=line.rstrip("\n"),
-                        context_before=ctx_before,
-                        context_after=ctx_after,
-                    ))
+                    matches.append(
+                        SearchMatch(
+                            file=rel_path,
+                            line_number=i + 1,
+                            content=line.rstrip("\n"),
+                            context_before=ctx_before,
+                            context_after=ctx_after,
+                        )
+                    )
                     total_found += 1
                     if total_found >= max_results:
                         break
@@ -474,16 +569,26 @@ def read_file(
 
     if not file_path.exists():
         return FileContent(
-            path=path, content="", start_line=0, end_line=0,
-            total_lines=0, size_bytes=0, language="",
-            error=f"File not found: {path}"
+            path=path,
+            content="",
+            start_line=0,
+            end_line=0,
+            total_lines=0,
+            size_bytes=0,
+            language="",
+            error=f"File not found: {path}",
         )
 
     if not file_path.is_file():
         return FileContent(
-            path=path, content="", start_line=0, end_line=0,
-            total_lines=0, size_bytes=0, language="",
-            error=f"Not a file: {path}"
+            path=path,
+            content="",
+            start_line=0,
+            end_line=0,
+            total_lines=0,
+            size_bytes=0,
+            language="",
+            error=f"Not a file: {path}",
         )
 
     size = file_path.stat().st_size
@@ -496,7 +601,7 @@ def read_file(
     if start_line is not None or end_line is not None:
         s = max(1, start_line or 1)
         e = min(total_lines, end_line or total_lines)
-        selected = lines[s - 1:e]
+        selected = lines[s - 1 : e]
 
         # Add line numbers
         numbered = []
@@ -504,9 +609,12 @@ def read_file(
             numbered.append(f"{i:>6}\t{line}")
         content = "\n".join(numbered)
         return FileContent(
-            path=path, content=content,
-            start_line=s, end_line=e,
-            total_lines=total_lines, size_bytes=size,
+            path=path,
+            content=content,
+            start_line=s,
+            end_line=e,
+            total_lines=total_lines,
+            size_bytes=size,
             language=language,
         )
     else:
@@ -516,9 +624,12 @@ def read_file(
             numbered.append(f"{i:>6}\t{line}")
         content = "\n".join(numbered)
         return FileContent(
-            path=path, content=content,
-            start_line=1, end_line=total_lines,
-            total_lines=total_lines, size_bytes=size,
+            path=path,
+            content=content,
+            start_line=1,
+            end_line=total_lines,
+            total_lines=total_lines,
+            size_bytes=size,
             language=language,
         )
 
@@ -570,25 +681,31 @@ def list_directory(
                 if _should_skip(name):
                     continue
                 count[0] += 1
-                children = _walk(full_path, current_depth + 1) if current_depth < depth else []
-                entries.append(DirectoryEntry(
-                    name=name,
-                    path=os.path.relpath(full_path, path),
-                    is_dir=True,
-                    children=children,
-                ))
+                children = (
+                    _walk(full_path, current_depth + 1) if current_depth < depth else []
+                )
+                entries.append(
+                    DirectoryEntry(
+                        name=name,
+                        path=os.path.relpath(full_path, path),
+                        is_dir=True,
+                        children=children,
+                    )
+                )
             else:
                 count[0] += 1
                 try:
                     size = os.path.getsize(full_path)
                 except OSError:
                     size = 0
-                entries.append(DirectoryEntry(
-                    name=name,
-                    path=os.path.relpath(full_path, path),
-                    is_dir=False,
-                    size=size,
-                ))
+                entries.append(
+                    DirectoryEntry(
+                        name=name,
+                        path=os.path.relpath(full_path, path),
+                        is_dir=False,
+                        size=size,
+                    )
+                )
 
         return entries
 
@@ -638,11 +755,13 @@ def find_files(
             except OSError:
                 size = 0
 
-            results.append(FileMatch(
-                path=str(rel),
-                size=size,
-                extension=match.suffix.lower(),
-            ))
+            results.append(
+                FileMatch(
+                    path=str(rel),
+                    size=size,
+                    extension=match.suffix.lower(),
+                )
+            )
     except Exception:
         # Fallback: manual walk + fnmatch
         for root, dirs, files in os.walk(path):
@@ -657,11 +776,13 @@ def find_files(
                         size = os.path.getsize(full)
                     except OSError:
                         size = 0
-                    results.append(FileMatch(
-                        path=rel,
-                        size=size,
-                        extension=os.path.splitext(filename)[1].lower(),
-                    ))
+                    results.append(
+                        FileMatch(
+                            path=rel,
+                            size=size,
+                            extension=os.path.splitext(filename)[1].lower(),
+                        )
+                    )
 
     return results
 

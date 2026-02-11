@@ -29,14 +29,17 @@ try:
     from mcp.server.stdio import stdio_server
     from mcp.types import TextContent, Tool
 except ImportError as e:
-    print("Error: MCP package not installed. Install with: pip install mcp>=1.0.0", file=sys.stderr)
+    print(
+        "Error: MCP package not installed. Install with: pip install mcp>=1.0.0",
+        file=sys.stderr,
+    )
     print(f"Details: {e}", file=sys.stderr)
     sys.exit(1)
 
 from app.core.config import get_settings
-from app.services.repo_service import RepoService, RepoServiceConfig
 from app.services import navigator
 from app.services.overview import get_overview
+from app.services.repo_service import RepoService, RepoServiceConfig
 
 # Logging to stderr (stdout is MCP protocol)
 logging.basicConfig(
@@ -54,11 +57,13 @@ def _get_repo_service() -> RepoService:
     global _repo_service
     if _repo_service is None:
         settings = get_settings()
-        _repo_service = RepoService(RepoServiceConfig(
-            storage_path=settings.repo_storage_path,
-            cache_ttl_hours=settings.repo_cache_ttl_hours,
-            clone_timeout_seconds=settings.repo_clone_timeout_seconds,
-        ))
+        _repo_service = RepoService(
+            RepoServiceConfig(
+                storage_path=settings.repo_storage_path,
+                cache_ttl_hours=settings.repo_cache_ttl_hours,
+                clone_timeout_seconds=settings.repo_clone_timeout_seconds,
+            )
+        )
     return _repo_service
 
 
@@ -80,7 +85,7 @@ TOOLS = [
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": "Local directory path or GitHub URL (e.g., /path/to/repo or https://github.com/owner/repo)"
+                    "description": "Local directory path or GitHub URL (e.g., /path/to/repo or https://github.com/owner/repo)",
                 },
             },
             "required": ["path"],
@@ -95,10 +100,7 @@ TOOLS = [
         inputSchema={
             "type": "object",
             "properties": {
-                "path": {
-                    "type": "string",
-                    "description": "Directory path to list"
-                },
+                "path": {"type": "string", "description": "Directory path to list"},
                 "depth": {
                     "type": "integer",
                     "description": "How many levels deep to show (default: 2)",
@@ -123,15 +125,12 @@ TOOLS = [
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "Regex pattern to search for (e.g., 'def authenticate', 'import.*jwt', 'TODO')"
+                    "description": "Regex pattern to search for (e.g., 'def authenticate', 'import.*jwt', 'TODO')",
                 },
-                "path": {
-                    "type": "string",
-                    "description": "Directory to search in"
-                },
+                "path": {"type": "string", "description": "Directory to search in"},
                 "file_type": {
                     "type": "string",
-                    "description": "Filter by language (e.g., 'python', 'js', 'ts', 'go', 'rust', 'java')"
+                    "description": "Filter by language (e.g., 'python', 'js', 'ts', 'go', 'rust', 'java')",
                 },
                 "ignore_case": {
                     "type": "boolean",
@@ -159,10 +158,7 @@ TOOLS = [
         inputSchema={
             "type": "object",
             "properties": {
-                "path": {
-                    "type": "string",
-                    "description": "Path to the file to read"
-                },
+                "path": {"type": "string", "description": "Path to the file to read"},
                 "start_line": {
                     "type": "integer",
                     "description": "Start reading from this line (1-indexed, inclusive)",
@@ -189,11 +185,11 @@ TOOLS = [
             "properties": {
                 "pattern": {
                     "type": "string",
-                    "description": "Glob pattern (e.g., '**/*.py', 'src/**/*.ts')"
+                    "description": "Glob pattern (e.g., '**/*.py', 'src/**/*.ts')",
                 },
                 "path": {
                     "type": "string",
-                    "description": "Base directory to search from"
+                    "description": "Base directory to search from",
                 },
                 "max_results": {
                     "type": "integer",
@@ -217,6 +213,7 @@ TOOLS = [
 async def handle_repo_overview(args: dict[str, Any]) -> str:
     """Handle repo_overview tool call."""
     import time
+
     path_or_url = args["path"]
 
     # Resolve path (handles both local and GitHub URLs)
@@ -256,9 +253,13 @@ async def handle_repo_overview(args: dict[str, Any]) -> str:
 
     # Stats
     stats = overview.file_stats
-    parts.append(f"## Stats: {stats.get('total_files', 0)} files, {stats.get('total_size_mb', 0)} MB")
+    parts.append(
+        f"## Stats: {stats.get('total_files', 0)} files, {stats.get('total_size_mb', 0)} MB"
+    )
     if stats.get("top_extensions"):
-        ext_str = ", ".join(f"{ext} ({count})" for ext, count in stats["top_extensions"][:10])
+        ext_str = ", ".join(
+            f"{ext} ({count})" for ext, count in stats["top_extensions"][:10]
+        )
         parts.append(f"Extensions: {ext_str}")
     parts.append("")
 
@@ -285,7 +286,9 @@ async def handle_repo_overview(args: dict[str, Any]) -> str:
         parts.append(overview.readme)
 
     parts.append("")
-    parts.append(f"---\n_Timing: clone/resolve {clone_time:.1f}s, scan {scan_time:.1f}s, total {clone_time + scan_time:.1f}s_")
+    parts.append(
+        f"---\n_Timing: clone/resolve {clone_time:.1f}s, scan {scan_time:.1f}s, total {clone_time + scan_time:.1f}s_"
+    )
 
     return "\n".join(parts)
 
@@ -430,7 +433,9 @@ async def main():
     """Main async entry point."""
     settings = get_settings()
     logger.info(f"Starting {settings.app_name} v{settings.app_version}")
-    logger.info("Tools: repo_overview, list_directory, search_code, read_file, find_files")
+    logger.info(
+        "Tools: repo_overview, list_directory, search_code, read_file, find_files"
+    )
 
     server = create_mcp_server()
 
