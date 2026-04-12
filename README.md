@@ -1,103 +1,124 @@
-# Scout 
+# Scout — MCP Code Navigator
 
 **Give Claude the ability to actually read, search, and understand any codebase.**
 
-**Works with:** Claude Desktop | Claude Code CLI
+**Works with:** Claude Desktop · Claude Code CLI · Any MCP-compatible agent
+
+[![PyPI](https://img.shields.io/pypi/v/scout-code-navigator)](https://pypi.org/project/scout-code-navigator/)
+[![Python](https://img.shields.io/pypi/pyversions/scout-code-navigator)](https://pypi.org/project/scout-code-navigator/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![CI](https://github.com/MayankSethi27/scout/actions/workflows/ci.yml/badge.svg)](https://github.com/MayankSethi27/scout/actions)
 
 ---
 
-## What is Scout?
-
-Scout is an [MCP server](https://modelcontextprotocol.io/) that solves a fundamental problem: **Claude can reason about code, but it can't see your code.** When you ask Claude about a repository, it's guessing based on general knowledge - it has no way to browse the directory structure, search for a function definition, or read a specific file.
-
-Scout fixes this. It gives Claude a set of code navigation tools - the same actions a developer takes when exploring an unfamiliar codebase:
-
-1. **Look at the project structure** - What's in this repo? What tech stack is it using?
-2. **Search for patterns** - Where is `authenticate` defined? Which files import `database`?
-3. **Read specific code** - Show me lines 50-100 of `auth.py`
-4. **Find files** - Where are all the `*.test.ts` files?
-
-No embeddings, no vector databases, no indexing step. Scout uses [ripgrep](https://github.com/BurntSushi/ripgrep) for fast regex search and direct file access - the same approach experienced developers use, just wired into Claude via MCP.
-
 ## The Problem
 
-When you paste a GitHub URL into ChatGPT or Claude, the model can only see the README (if that). It can't browse the repo, search code, or read files. For any real question about how code works, you end up manually copying and pasting file contents into the chat - which breaks down completely on large repos.
+When you share a GitHub URL with Claude — or any LLM — it can only see the README, maybe a few files from its training data. It can't browse the directory structure, search for a function definition, or read a specific file. For any real question about how code works, you end up manually copying and pasting file contents into the chat, which breaks down completely on large codebases.
 
-| | Pasting URLs into chat | Scout |
+Scout fixes this. It's an [MCP server](https://modelcontextprotocol.io/) that gives Claude the same tools a developer uses to explore an unfamiliar codebase: browse the structure, search for patterns, read specific files.
+
+---
+
+## Why Not Just Use [X]?
+
+### Why not the GitHub CLI (`gh`)?
+
+`gh` **manages** repositories — pull requests, issues, releases, secrets. Scout **reads** code. They solve completely different problems:
+
+| | `gh` CLI | Scout |
 |---|---|---|
-| **Code access** | README only, maybe a few files | Full codebase - every file, every line |
-| **Large repos** | Hits context limits fast | Handles 100k+ files efficiently |
-| **Accuracy** | Hallucinates function signatures and file paths | Returns actual code with real line numbers |
-| **Private repos** | No access at all | Uses your local git credentials |
-| **Workflow** | You copy-paste code manually | Claude searches and reads code autonomously |
+| Purpose | Manage repos via GitHub API | Navigate and read code locally |
+| Code search | No regex search | ripgrep across entire codebase |
+| Private repos | Needs GitHub auth token | Uses your existing git credentials |
+| Rate limits | GitHub API limits | None — runs fully locally |
+| MCP server | No | Yes — Claude calls it autonomously |
+| Local-only repos | No | Yes |
 
-## Why not just use GitHub CLI?
+### Why not Claude's built-in "Add from GitHub" feature?
 
-GitHub CLI (`gh`) **manages** repos (PRs, issues, releases). Scout **understands** code. Different tools, different jobs:
+Claude's chat UI can pull a repo into context, but it has hard limits:
 
-- `gh` talks to GitHub's API - Scout runs locally with no rate limits
-- `gh` can't do regex search with context lines - Scout uses ripgrep across the entire codebase
-- `gh` isn't an MCP server - Scout is, so Claude calls it autonomously
-- `gh` doesn't work on local directories - Scout works on both local and GitHub repos
+- Hits context window limits on any medium/large repo
+- Loads everything at once — no incremental "look at this file" exploration
+- No regex search across the codebase
+- Not available in Claude Code CLI or programmatic use
+- Claude can't ask for *more* code if it needs to dig deeper
 
-**They're complementary.** Use `gh` to manage repos. Use Scout to let Claude read the code inside them.
+Scout lets Claude navigate code the way a developer would — incrementally browsing structure, searching for patterns, and reading only the relevant files.
+
+### Why not GitHub Copilot's codebase indexing?
+
+Copilot indexes your codebase using embeddings/vector search — which means:
+
+- You wait for indexing before you can search
+- Results are semantic approximations, not exact matches
+- No line-number precision
+- Tied to the Copilot ecosystem
+
+Scout uses direct file access + ripgrep. Zero indexing wait. Exact regex matches with line numbers. Works on any repo, anywhere, with any MCP-compatible agent.
+
+### Why not just paste code into the chat?
+
+This works for small files. It breaks down when:
+- The repo has 50+ relevant files
+- You don't know which files are relevant yet
+- The function you need is buried 4 directories deep
+- You hit the context window limit before finding the answer
+
+Scout lets Claude search first, then read only what's relevant.
+
+---
 
 ## Features
 
-- **No API Keys** - Everything runs locally on your machine
-- **No Indexing** - Start exploring immediately, zero setup wait
-- **Fast** - Regex search powered by ripgrep, even on massive codebases
-- **Private Repos** - Uses your existing git credentials
-- **20+ Languages** - Python, JS, TS, Go, Rust, Java, C++, and more
-- **Lightweight** - 6 dependencies, minimal footprint, instant startup
-- **Works Anywhere** - Local directories, GitHub URLs, or both
+- **No API Keys** — Runs entirely on your machine
+- **No Indexing** — Start exploring immediately, zero setup wait
+- **Fast Search** — ripgrep-powered regex across 100k+ file codebases
+- **Private Repos** — Uses your existing git credentials
+- **GitHub URL Support** — Shallow-clone any public or private repo on first use
+- **20+ Languages** — Python, JS, TS, Go, Rust, Java, C++, Ruby, and more
+- **Lightweight** — 6 dependencies, ~500 lines of core logic
+- **Dual Mode** — stdio for Claude Desktop/CLI, HTTP for team/shared use
+
+---
 
 ## Quick Start
 
 ### Step 1: Install
 
 ```bash
-pip install pipx
-python -m pipx ensurepath
-# Close and reopen your terminal after this
+pip install pipx && python -m pipx ensurepath
+# Close and reopen your terminal
 
 pipx install scout-code-navigator
 ```
 
-### Step 2: Add to Claude
-
-Choose your platform:
-
----
+### Step 2: Connect to Claude
 
 #### Claude Desktop
 
-1. Open the Claude Desktop config file:
+Open your config file:
 
-   | OS | Config File Location |
-   |----|---------------------|
-   | macOS | `~/Library/Application Support/Claude/claude_desktop_config.json` |
-   | Windows | `%APPDATA%\Claude\claude_desktop_config.json` |
-   | Linux | `~/.config/claude/claude_desktop_config.json` |
+| OS | Path |
+|----|------|
+| macOS | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Windows | `%APPDATA%\Claude\claude_desktop_config.json` |
+| Linux | `~/.config/claude/claude_desktop_config.json` |
 
-2. Add the MCP server configuration:
+Add the server:
 
-   ```json
-   {
-     "mcpServers": {
-       "scout": {
-         "command": "scout",
-         "args": []
-       }
-     }
-   }
-   ```
+```json
+{
+  "mcpServers": {
+    "scout": {
+      "command": "scout",
+      "args": []
+    }
+  }
+}
+```
 
-   > **Note:** If you already have other MCP servers configured, just add the `"scout"` entry inside the existing `"mcpServers"` object.
-
-3. **Restart Claude Desktop** to apply changes.
-
----
+Restart Claude Desktop. Done.
 
 #### Claude Code CLI
 
@@ -105,167 +126,200 @@ Choose your platform:
 claude mcp add scout -s user -- scout
 ```
 
-The `-s user` flag adds it at user scope, so it works in any directory.
+The `-s user` flag registers it globally — works in any project directory.
+
+#### Verify
+
+- **Claude Desktop:** Look for the tool icon (hammer) in the chat UI
+- **Claude Code CLI:** Run `/mcp` and confirm `scout` appears as connected
 
 ---
 
-#### Verify Installation
-
-After setup, verify the MCP server is connected:
-
-- **Claude Desktop:** Look for the tool icon in the chat interface
-- **Claude Code CLI:** Run `/mcp` to see connected servers
-
-> **If you get "command not found"** after install, see [Troubleshooting](#command-not-found-scout) below.
-
 ## Tools
 
-Scout provides 5 tools that Claude uses automatically:
+Claude calls these automatically based on your questions:
 
-| Tool | Description |
-|------|-------------|
-| `repo_overview` | High-level overview: directory tree, README, tech stack detection, file stats, entry points |
-| `list_directory` | Browse directory contents with depth control (1-10 levels) |
-| `search_code` | Regex search across the codebase using ripgrep, with file type filtering |
-| `read_file` | Read file contents with optional line range selection |
-| `find_files` | Find files by glob pattern (e.g., `**/*.py`, `src/**/*.ts`) |
+| Tool | When Claude uses it |
+|------|-------------------|
+| `repo_overview` | First look at any repo — tree, README, detected stack, file counts |
+| `list_directory` | Drilling into a specific subdirectory |
+| `search_code` | Finding where a function/class/pattern is defined or used |
+| `read_file` | Reading a specific file, optionally just a line range |
+| `find_files` | Locating files by name pattern (e.g., all `*.test.ts` files) |
+
+---
 
 ## Usage
 
-Once configured, just ask Claude to analyze any repo:
+Once connected, just talk to Claude about code:
 
 ```
 "Analyze https://github.com/pallets/flask and explain how routing works"
 
-"How does authentication work in https://github.com/tiangolo/fastapi?"
+"How does authentication work in this codebase?"
 
-"Find the database models in https://github.com/django/django"
+"Find all the database models in https://github.com/django/django"
 
-"Explore my local project at /path/to/my/project"
+"Where is the rate limiting logic implemented?"
+
+"Explore my local project at /path/to/my/project and summarize the architecture"
 ```
+
+Claude will call the tools incrementally — browsing structure, searching for patterns, reading the relevant files — then explain what it finds.
+
+---
 
 ## How It Works
 
 ```
-You: "How does routing work in this Flask app?"
-                         |
-                         v
-Claude calls tools incrementally:
-+-----------------------------------------------------------+
-| 1. repo_overview  -> directory tree, README, tech stack   |
-| 2. search_code    -> ripgrep search for "def route"       |
-| 3. read_file      -> read matching files with line ranges |
-+-----------------------------------------------------------+
-                         |
-                         v
-Claude receives actual code snippets and explains them to you
+You ask: "How does routing work in this Flask app?"
+                    |
+                    v
+Claude calls tools in sequence:
+┌────────────────────────────────────────────────────────┐
+│ 1. repo_overview  → directory tree + README + stack    │
+│ 2. search_code    → ripgrep for "def route", "@app."   │
+│ 3. read_file      → read matching files at line ranges │
+└────────────────────────────────────────────────────────┘
+                    |
+                    v
+Claude explains the actual code to you
 ```
 
-No indexing step, no embedding computation. Claude navigates the code like a developer would - browsing structure, searching for patterns, and reading relevant files.
+No embeddings. No vector database. No indexing step. Just direct file access and regex search — the same approach experienced developers use, made available to Claude via MCP.
 
-## Configuration (Optional)
+---
 
-Create a `.env` file to customize settings:
+## Configuration
+
+Create a `.env` file in your working directory to override defaults:
 
 ```bash
-# Application
-APP_NAME="Scout Code Navigator"
-DEBUG=false
+# Repository cloning (GitHub URLs only — local repos need nothing)
+REPO_STORAGE_PATH=~/.scout/repos   # Where cloned repos are cached
+REPO_CACHE_TTL_HOURS=24            # How long before re-cloning
+REPO_CLONE_TIMEOUT_SECONDS=300     # Max time to wait for a clone
 
-# HTTP Server (only for scout-http mode)
+# HTTP Server mode only
 SERVER_HOST=0.0.0.0
 SERVER_PORT=8000
-
-# Repository cloning (GitHub URLs only, local repos need no config)
-REPO_STORAGE_PATH=~/.scout/repos
-REPO_CACHE_TTL_HOURS=24
-REPO_CLONE_TIMEOUT_SECONDS=300
 ```
+
+---
 
 ## Private Repositories
 
-The tool uses your system's git credentials. To access private repos:
+Scout uses your system's git credentials — whatever works in your terminal works in Scout.
 
 ```bash
 # Option 1: GitHub CLI (recommended)
 gh auth login
 
-# Option 2: SSH key
-# Just make sure your SSH key is set up for GitHub
+# Option 2: SSH key (if already set up, nothing extra needed)
 
 # Option 3: Credential helper
 git config --global credential.helper store
 ```
 
-## Alternative: HTTP Server Mode
+---
 
-Run the server over HTTP for shared/team use:
+## HTTP Server Mode
+
+For shared team use, run Scout as an HTTP server instead of a local stdio process:
 
 ```bash
-# Start HTTP server
+# Start the server
 scout-http
-
-# Server runs on http://0.0.0.0:8000
+# Runs on http://localhost:8000
 # API docs at http://localhost:8000/docs
 ```
 
-Then configure Claude Code CLI to connect:
+Connect Claude Code CLI to it:
+
 ```bash
 claude mcp add --transport http scout http://localhost:8000
 ```
 
+The HTTP server exposes identical functionality to the stdio server — same 5 tools, same behavior — via `POST` endpoints.
+
+---
+
 ## Troubleshooting
 
-**"Command not found: scout"** - Python's Scripts folder isn't in your PATH. Easiest fix:
+**"Command not found: scout"**
+
+Python's Scripts directory isn't on your PATH. Use `pipx` (it handles PATH automatically):
 
 ```bash
-pipx install scout-code-navigator   # pipx handles PATH automatically
+pipx install scout-code-navigator
 ```
 
-Or bypass PATH entirely using `python -m`:
+Or bypass PATH entirely:
+
 ```json
-{ "mcpServers": { "scout": { "command": "python", "args": ["-m", "mcp_stdio_server"] } } }
-```
-```bash
-# Claude Code CLI equivalent
-claude mcp add scout -s user -- python -m mcp_stdio_server
+{
+  "mcpServers": {
+    "scout": {
+      "command": "python",
+      "args": ["-m", "mcp_stdio_server"]
+    }
+  }
+}
 ```
 
-**Ripgrep not found** - Scout falls back to Python search automatically, but for best performance install [ripgrep](https://github.com/BurntSushi/ripgrep): `brew install ripgrep` (macOS), `apt install ripgrep` (Ubuntu), `scoop install ripgrep` (Windows).
+**"Search is slow"**
+
+Scout uses ripgrep when available and falls back to Python search when not. For best performance, install ripgrep:
+
+```bash
+brew install ripgrep          # macOS
+apt install ripgrep           # Ubuntu/Debian
+scoop install ripgrep         # Windows
+winget install BurntSushi.ripgrep  # Windows (alternative)
+```
+
+**"Clone failed for private repo"**
+
+Run `gh auth login` or ensure your SSH key is set up and test with `git clone <url>` in your terminal first.
+
+---
 
 ## Development
 
 ```bash
-# Clone the repo
 git clone https://github.com/MayankSethi27/scout.git
 cd scout
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # or venv\Scripts\activate on Windows
-
-# Install in development mode
+python -m venv venv && source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -e ".[dev]"
 
 # Run tests
 pytest
 
-# Run MCP server locally
+# Run a single test
+pytest tests/unit/test_services.py::TestSearchCode
+
+# Format code
+black . && isort .
+
+# Run the stdio server locally
 python mcp_stdio_server.py
 
-# Run HTTP server locally
+# Run the HTTP server locally
 python mcp_server.py
 ```
+
+---
 
 ## Tech Stack
 
 - **Python 3.10+** with async/await
-- **MCP SDK** (Model Context Protocol)
-- **FastAPI** + **Uvicorn** for HTTP mode
-- **Pydantic** for data validation
-- **Ripgrep** for fast regex search (optional, has Python fallback)
+- **[MCP SDK](https://github.com/modelcontextprotocol/python-sdk)** — Model Context Protocol
+- **[ripgrep](https://github.com/BurntSushi/ripgrep)** — Fast regex search (optional, Python fallback included)
+- **FastAPI** + **Uvicorn** — HTTP server mode
+- **Pydantic** — Data validation and settings
+
+---
 
 ## License
 
-- MIT
-- Claude Code
+MIT — see [LICENSE](LICENSE).
