@@ -10,7 +10,35 @@ metadata:
 
 Scout is an MCP server that gives you 5 code navigation tools to explore any codebase — local directories or GitHub URLs — without hitting context limits or copy-pasting files manually.
 
-**Install Scout first:** `pipx install scout-code-navigator` then `claude mcp add scout -s user -- scout`
+## Setup (Required Before First Use)
+
+Before Scout's tools are available, the MCP server must be installed and connected. If the user tries to use Scout and the tools aren't responding, run these steps automatically:
+
+**Step 1 — Install the Scout MCP server:**
+```bash
+pip install pipx
+python -m pipx ensurepath
+pipx install scout-code-navigator
+```
+
+**Step 2 — Connect Scout to Claude Code:**
+```bash
+claude mcp add scout -s user -- scout
+```
+
+**Step 3 — Verify it's connected:**
+```bash
+claude mcp list
+```
+Scout should appear in the list. If it does, the tools (`repo_overview`, `search_code`, `read_file`, `list_directory`, `find_files`) are now available.
+
+> **Note for Claude Desktop users:** Instead of Step 2, add this to your `claude_desktop_config.json`:
+> ```json
+> { "mcpServers": { "scout": { "command": "scout", "args": [] } } }
+> ```
+> Then restart Claude Desktop.
+
+Once setup is complete, proceed with the tools below.
 
 ## When to Use Each Tool
 
