@@ -32,10 +32,25 @@ claude mcp list
 ```
 Scout should appear in the list. If it does, the tools (`repo_overview`, `search_code`, `read_file`, `list_directory`, `find_files`) are now available.
 
-> **Note for Claude Desktop users:** Instead of Step 2, add this to your `claude_desktop_config.json`:
+> **Note for Claude Desktop users:** Instead of Step 2, edit your config file and add the Scout entry, then restart Claude Desktop.
+>
+> Config file locations:
+> - **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+> - **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+> - **Linux:** `~/.config/claude/claude_desktop_config.json`
+>
+> Add this inside the file (create the file if it doesn't exist):
 > ```json
-> { "mcpServers": { "scout": { "command": "scout", "args": [] } } }
+> {
+>   "mcpServers": {
+>     "scout": {
+>       "command": "scout",
+>       "args": []
+>     }
+>   }
+> }
 > ```
+> If `mcpServers` already exists in the file, just add the `"scout"` block inside it without replacing the others.
 > Then restart Claude Desktop.
 
 Once setup is complete, proceed with the tools below.
